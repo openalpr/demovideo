@@ -1,0 +1,7 @@
+*.pyc
+*.mp4
+*.avi
+venv
+*.sqlite
+*.csv
+.idea/
