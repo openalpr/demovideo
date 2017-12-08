@@ -127,7 +127,8 @@ for row in c.execute(group_query):
         'frame_start': int(row[3]),
         'frame_end': int(row[4]),
         'confidence': float(row[5]),
-        'region': row[6]
+        'region': row[6],
+        'region_confidence': row[7]
     }
 
     all_groups.append(group_obj)
@@ -262,6 +263,11 @@ for group in all_groups:
     # if len(plate_number) == 6:
     #     # Insert a space in the middle
     #     plate_number = plate_number[:3] + " " + plate_number[3:]
+
+    state = group['region']
+    state_conf = group['region_confidence']
+    if (state_conf > 80 and state != 'ir'):
+        plate_number += " (%s)" % (state)
 
     smoothed_data = get_smoothed_data(group)
 
