@@ -28,6 +28,9 @@ parser.add_argument("--time_start", dest="time_start", action="store", metavar='
 parser.add_argument('-p', '--preview', dest="preview", action='store_true', default=False,
                     help="Show a preview window rather than writing to file")
 
+parser.add_argument('--must_match_pattern', dest="must_match_pattern", action='store_true', default=False,
+                    help="Only show plates that match the plate pattern")
+
 parser.add_argument("--time_end", dest="time_end", action="store", metavar='time_end', type=float, default=0,
                   help="Time (in seconds) to end playback in the video" )
 
@@ -111,7 +114,12 @@ conn = sqlite3.connect(options.sqlite)
 c = conn.cursor()
 
 all_groups = []
-for row in c.execute("SELECT id, country, plate_number, frame_start, frame_end, confidence, region FROM plate_group ORDER BY frame_start ASC"):
+where_clause = ""
+if options.must_match_pattern:
+	where_clause = "WHERE matches_pattern=1"
+group_query = "SELECT id, country, plate_number, frame_start, frame_end, confidence, region, region_confidence FROM plate_group %s ORDER BY frame_start ASC" % (where_clause)
+
+for row in c.execute(group_query):
     group_obj = {
         'id': int(row[0]),
         'country': row[1],
