@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# -*- coding: utf-8 -*-
 
 # Given a SQLite database and a video, make a pimp demo video
 from argparse import ArgumentParser
