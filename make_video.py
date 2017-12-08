@@ -289,14 +289,15 @@ for group in all_groups:
 
     # add an insert effect at t + 2 frame
     effect_time = time_start + smoothed_data.frame_to_time(fps, 2)
-    painting_fade = get_insert_effect(group, effect_time, smoothed_data)
     print ("Getting effect for %f" % (effect_time))
+#    painting_fade = get_insert_effect(group, effect_time, smoothed_data)
+    painting_fade = None
     if painting_fade is not None:
         inserts.append((effect_time, painting_fade))
 
-    sound_clippy = get_audio_insert(group_count, time_start)
-    if sound_clippy is not None:
-        audio_track.append(sound_clippy)
+    # sound_clippy = get_audio_insert(group_count, time_start)
+    # if sound_clippy is not None:
+    #     audio_track.append(sound_clippy)
 
     group_count += 1
     #
@@ -329,11 +330,12 @@ all_clips.append(composited.subclip(last_time_end, video_clip.end))
 #final = final.subclip(0, video_clip.end)
 final = concatenate_videoclips(all_clips)
 
-all_audio = CompositeAudioClip(audio_track).set_fps(44100).set_duration(final.duration)
+#all_audio = CompositeAudioClip(audio_track).set_fps(44100).set_duration(final.duration)
 
 if options.time_end == 0:
     options.time_end = final.duration
-final = final.set_audio(all_audio).subclip(options.time_start, options.time_end)
+#final = final.set_audio(all_audio).subclip(options.time_start, options.time_end)
+final = final.subclip(options.time_start, options.time_end)
 
 if options.preview:
     final.preview()
