@@ -7,7 +7,8 @@ import sys
 from moviepy.editor import *
 import sqlite3
 from frame_smoother import FrameSmoother
-import cv
+import cv2
+import numpy
 
 parser = ArgumentParser(description='Vehicle color detector')
 
@@ -38,11 +39,11 @@ parser.add_argument( "--font_size", dest="font_size", action="store", metavar='f
 options = parser.parse_args()
 
 if not os.path.isfile(options.sqlite):
-    print "Cannot find sqlite file: " + options.sqlite
+    print ("Cannot find sqlite file: " + options.sqlite)
     sys.exit(1)
 
 if not os.path.isfile(options.video):
-    print "Cannot find input video file: " + options.video
+    print ("Cannot find input video file: " + options.video)
     sys.exit(1)
 
 def get_center_point(plate):
@@ -56,14 +57,14 @@ def get_center_point(plate):
     y4 = int(plate['y4'])
 
     points = [(x1,y1), (x2,y2), (x3,y3), (x4,y4)]
-    moment = cv.Moments(points)
-    center_point_x = int(round(moment.m10/moment.m00))
-    center_point_y = int(round(moment.m01/moment.m00))
+    moment = cv2.moments(numpy.array(points))
+    center_point_x = int(round(moment['m10']/moment['m00']))
+    center_point_y = int(round(moment['m01']/moment['m00']))
 
     # center_point_x = x1 + ((x2 - x1) / 2)
     # center_point_y = y3 + ((y3 - y2) / 2)
 
-    print "%s: x1/y1 Points: %d, %d -- Center: %d, %d" % (plate['plate_number'], x1, y1, center_point_x, center_point_y)
+    print ("%s: x1/y1 Points: %d, %d -- Center: %d, %d" % (plate['plate_number'], x1, y1, center_point_x, center_point_y))
     return (center_point_x, center_point_y)
 
 def get_width_height(plate):
@@ -125,17 +126,17 @@ for row in c.execute("SELECT id, country, plate_number, frame_start, frame_end, 
 video_clip = VideoFileClip(options.video)
 w,h = moviesize = video_clip.size
 fps = video_clip.fps
-print "FPS: " + str(video_clip.fps)
+print ("FPS: " + str(video_clip.fps))
 
-print "Available fonts: "
-print TextClip.list('font')
+print ("Available fonts: ")
+print (TextClip.list('font'))
 
 
 def get_smoothed_data(group):
 
     plates_for_group = get_plates_for_group(group['id'])
     for plate in plates_for_group:
-        print "%s: frame_num: %d" % (group['plate_number'], plate['frame_num'])
+        print ("%s: frame_num: %d" % (group['plate_number'], plate['frame_num']))
     smoothed_data = FrameSmoother(group, plates_for_group)
 
     return smoothed_data
@@ -178,7 +179,7 @@ def get_text_clip(group, smoothed_data, plate_number):
     txt_col = txt.on_color(size=(txt.w,txt.h),
                       color=text_bg_color,  col_opacity=bg_opacity)
 
-    print "Time start: %f - Time end %f" % (time_start, time_end)
+    print ("Time start: %f - Time end %f" % (time_start, time_end))
 
 
 
@@ -192,17 +193,17 @@ FREEZE_DURATION = 2
 def get_insert_effect(group, time_start, smoothed_data):
 
     if (time_start < options.time_start):
-        print "Skipping effect with BLANK 2 second clip because %f < %f" % (time_start, options.time_start)
+        print ("Skipping effect with BLANK 2 second clip because %f < %f" % (time_start, options.time_start))
         #return ColorClip((w,h), col=(255,0,0), duration=FREEZE_DURATION)
         return None
     elif time_start > options.time_end and options.time_end != 0:
-        print "Skipping effect with NULL clip because %f > %f" % (time_start, options.time_end)
+        print ("Skipping effect with NULL clip because %f > %f" % (time_start, options.time_end))
         return None
 
     # Add an effect the moment each plate is recognized
     freeze_frame = video_clip.to_ImageClip(time_start)
 
-    painting = video_clip.fx( vfx.painting, saturation = 1.9, black = 0.002).to_ImageClip(time_start)
+    painting = video_clip.fx( vfx.painting, saturation=1.9, black = 0.002).to_ImageClip(time_start)
 
     txt = TextClip(plate_number, font=options.font,
                        color=txt_fg_color,fontsize=options.font_size )
@@ -244,14 +245,14 @@ group_count = 0
 
 for group in all_groups:
 
-    print " -- "
-    print group['plate_number']
-    print " --"
+    print (" -- ")
+    print (group['plate_number'])
+    print (" --")
 
     plate_number = group['plate_number']
-    if len(plate_number) == 6:
-        # Insert a space in the middle
-        plate_number = plate_number[:3] + " " + plate_number[3:]
+    # if len(plate_number) == 6:
+    #     # Insert a space in the middle
+    #     plate_number = plate_number[:3] + " " + plate_number[3:]
 
     smoothed_data = get_smoothed_data(group)
 
@@ -260,10 +261,10 @@ for group in all_groups:
 
 
     if (time_start < options.time_start):
-        print "Skipping effect because %f < %f" % (time_start, options.time_start)
+        print ("Skipping effect because %f < %f" % (time_start, options.time_start))
         continue
     elif time_start > options.time_end and options.time_end != 0:
-        print "Skipping effect with NULL clip because %f > %f" % (time_start, options.time_end)
+        print ("Skipping effect with NULL clip because %f > %f" % (time_start, options.time_end))
         continue
 
     # Get the text overlay
@@ -273,8 +274,8 @@ for group in all_groups:
 
     # add an insert effect at t + 2 frame
     effect_time = time_start + smoothed_data.frame_to_time(fps, 2)
-    print "Getting effect for %f" % (effect_time)
     painting_fade = get_insert_effect(group, effect_time, smoothed_data)
+    print ("Getting effect for %f" % (effect_time))
     if painting_fade is not None:
         inserts.append((effect_time, painting_fade))
 

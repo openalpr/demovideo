@@ -11,8 +11,8 @@ class FrameSmoother():
 
         self._organize_plates_by_frame()
 
-        for k,v in self.plates_by_frame.iteritems():
-            print k
+        for k,v in self.plates_by_frame.items():
+            print (k)
         self.fill_missing_frames()
 
         self.smooth_frames()
@@ -45,7 +45,7 @@ class FrameSmoother():
                 x_diff = next_center[0] - last_center[0]
                 y_diff = next_center[1] - last_center[1]
                 frames_missing = q - i
-                print "XDIFF: %d  YDIFF: %d   Frames_missing: %d" % (x_diff, y_diff, frames_missing)
+                print ("XDIFF: %d  YDIFF: %d   Frames_missing: %d" % (x_diff, y_diff, frames_missing))
                 q = i
                 while q not in self.plates_by_frame:
 
@@ -56,7 +56,7 @@ class FrameSmoother():
                         'center_x': round(my_center_x, 0),
                         'center_y': round(my_center_y, 0)
                     }
-                    print "%d: Interpolated center: %d, %d" % (q, my_center_x, my_center_y)
+                    print ("%d: Interpolated center: %d, %d" % (q, my_center_x, my_center_y))
                     q += 1
 
 
@@ -66,7 +66,7 @@ class FrameSmoother():
                     'center_x': self.plates_by_frame[i]['center_x'],
                     'center_y': self.plates_by_frame[i]['center_y']
                 }
-                print "%d: No interpolation: %d, %d" %(i, self.plates_by_frame[i]['center_x'], self.plates_by_frame[i]['center_y'])
+                print ("%d: No interpolation: %d, %d" %(i, self.plates_by_frame[i]['center_x'], self.plates_by_frame[i]['center_y']))
 
                 #last_slope =
                 #last_center = (self.positions[i]['center_x'], self.positions[i]['center_y'])
@@ -83,7 +83,7 @@ class FrameSmoother():
         try:
             window_size = np.abs(np.int(window_size))
             order = np.abs(np.int(order))
-        except ValueError, msg:
+        except ValueError:
             raise ValueError("window_size and order have to be of type int")
         if window_size % 2 != 1 or window_size < 1:
             raise TypeError("window_size size must be a positive odd number")
@@ -129,8 +129,8 @@ class FrameSmoother():
         index = 0
         for k in sorted(self.positions):
             v = self.positions[k]
-            print "%s: %d: orig: %d, %d -- smoothed: %f, %f -- rounded: %f, %f" % (self.group['plate_number'], k, self.positions[k]['center_x'], self.positions[k]['center_y'],
-                                                            self.smoothed_x[index], self.smoothed_y[index], round(self.smoothed_x[index], 0), round(self.smoothed_y[index], 0))
+            print ("%s: %d: orig: %d, %d -- smoothed: %f, %f -- rounded: %f, %f" % (self.group['plate_number'], k, self.positions[k]['center_x'], self.positions[k]['center_y'],
+                                                            self.smoothed_x[index], self.smoothed_y[index], round(self.smoothed_x[index], 0), round(self.smoothed_y[index], 0)))
             index += 1
 
     def frame_to_time(self, fps, frame):
@@ -148,7 +148,7 @@ class FrameSmoother():
         if smoothed_index < 0 or smoothed_index > len(self.smoothed_x) or frame_num < self.group['frame_start'] or frame_num > self.group['frame_end']:
             return (-100, -100)
 
-        print "%s: %f - frame %d - index %d - x/y: %d, %d" % (self.group['plate_number'], time, frame_num, smoothed_index, self.smoothed_x[smoothed_index], self.smoothed_y[smoothed_index])
+        print ("%s: %f - frame %d - index %d - x/y: %d, %d" % (self.group['plate_number'], time, frame_num, smoothed_index, self.smoothed_x[smoothed_index], self.smoothed_y[smoothed_index]))
         return (round(self.smoothed_x[smoothed_index], 0),
                 round(self.smoothed_y[smoothed_index], 0))
 
