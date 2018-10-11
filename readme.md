@@ -16,10 +16,10 @@ The output is a video file with the plate numbers overlayed
 Installation
 -----------------
 
-  sudo apt-get update && apt-get install python-virtualenv
-  virtualenv venv
-  source venv/bin/activate
-  pip install -r requirements.txt
+    sudo apt-get update && apt-get install python-virtualenv
+    virtualenv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
 
 
 Usage
