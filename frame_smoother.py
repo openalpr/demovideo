@@ -20,7 +20,7 @@ class FrameSmoother():
     # Fill a dictionary indexed by frame number
     def _organize_plates_by_frame(self):
         for plate in self.plates:
-            self.plates_by_frame[plate['frame_num']] = plate
+            self.plates_by_frame[plate['f']] = plate
 
 
     # Fill the interstitial frames where no plate was found
@@ -129,7 +129,10 @@ class FrameSmoother():
         index = 0
         for k in sorted(self.positions):
             v = self.positions[k]
-            print ("%s: %d: orig: %d, %d -- smoothed: %f, %f -- rounded: %f, %f" % (self.group['plate_number'], k, self.positions[k]['center_x'], self.positions[k]['center_y'],
+            plate_number = ''
+            if 'best_plate_number' in self.group:
+                plate_number = self.group['best_plate_number']
+            print ("%s: %d: orig: %d, %d -- smoothed: %f, %f -- rounded: %f, %f" % (plate_number, k, self.positions[k]['center_x'], self.positions[k]['center_y'],
                                                             self.smoothed_x[index], self.smoothed_y[index], round(self.smoothed_x[index], 0), round(self.smoothed_y[index], 0)))
             index += 1
 
@@ -144,11 +147,14 @@ class FrameSmoother():
 
         smoothed_index = frame_num - self.group['frame_start']
 
+        plate_number = ''
+        if 'best_plate_number' in self.group:
+            plate_number = self.group['best_plate_number']
 
         if smoothed_index < 0 or smoothed_index > len(self.smoothed_x) or frame_num < self.group['frame_start'] or frame_num > self.group['frame_end']:
             return (-100, -100)
 
-        print ("%s: %f - frame %d - index %d - x/y: %d, %d" % (self.group['plate_number'], time, frame_num, smoothed_index, self.smoothed_x[smoothed_index], self.smoothed_y[smoothed_index]))
+        print ("%s: %f - frame %d - index %d - x/y: %d, %d" % (plate_number, time, frame_num, smoothed_index, self.smoothed_x[smoothed_index], self.smoothed_y[smoothed_index]))
         return (round(self.smoothed_x[smoothed_index], 0),
                 round(self.smoothed_y[smoothed_index], 0))
 

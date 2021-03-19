@@ -6,18 +6,23 @@ from argparse import ArgumentParser
 import os
 import sys
 from moviepy.editor import *
-import sqlite3
 from frame_smoother import FrameSmoother
 import cv2
 import numpy
+from alprstream import AlprStream
+from openalpr import Alpr, VehicleClassifier
+import hashlib
+import json
+import time
+from data_formatter import get_vehicle_label
 
-parser = ArgumentParser(description='Vehicle color detector')
-
-parser.add_argument("-s", dest="sqlite", action="store", metavar='sqlite', required=True,
-                  help="Path to SQLite input file" )
+parser = ArgumentParser(description='OpenALPR Demo Movie Maker')
 
 parser.add_argument("-v", dest="video", action="store", metavar='video', required=True,
                   help="Path to input video file" )
+
+parser.add_argument("-c", "--country",  dest="country", action="store", default='us',
+                  help="Country for plate recognition" )
 
 parser.add_argument('output_video', metavar='output_video', type=str,
                    help='Path to output video')
@@ -27,6 +32,9 @@ parser.add_argument("--time_start", dest="time_start", action="store", metavar='
 
 parser.add_argument('-p', '--preview', dest="preview", action='store_true', default=False,
                     help="Show a preview window rather than writing to file")
+
+parser.add_argument('-g', '--gpu', dest="gpu", action='store_true', default=False,
+                    help="Use GPU for processing")
 
 parser.add_argument('--must_match_pattern', dest="must_match_pattern", action='store_true', default=False,
                     help="Only show plates that match the plate pattern")
@@ -42,96 +50,99 @@ parser.add_argument( "--font_size", dest="font_size", action="store", metavar='f
 
 options = parser.parse_args()
 
-if not os.path.isfile(options.sqlite):
-    print ("Cannot find sqlite file: " + options.sqlite)
-    sys.exit(1)
 
 if not os.path.isfile(options.video):
     print ("Cannot find input video file: " + options.video)
     sys.exit(1)
 
-def get_center_point(plate):
-    x1 = int(plate['x1'])
-    y1 = int(plate['y1'])
-    x2 = int(plate['x2'])
-    y2 = int(plate['y2'])
-    x3 = int(plate['x3'])
-    y3 = int(plate['y3'])
-    x4 = int(plate['x4'])
-    y4 = int(plate['y4'])
-
-    points = [(x1,y1), (x2,y2), (x3,y3), (x4,y4)]
-    moment = cv2.moments(numpy.array(points))
-    center_point_x = int(round(moment['m10']/moment['m00']))
-    center_point_y = int(round(moment['m01']/moment['m00']))
-
-    # center_point_x = x1 + ((x2 - x1) / 2)
-    # center_point_y = y3 + ((y3 - y2) / 2)
-
-    print ("%s: x1/y1 Points: %d, %d -- Center: %d, %d" % (plate['plate_number'], x1, y1, center_point_x, center_point_y))
-    return (center_point_x, center_point_y)
-
-def get_width_height(plate):
-    x1 = int(plate['x1'])
-    y1 = int(plate['y1'])
-    x2 = int(plate['x2'])
-    y2 = int(plate['y2'])
-    x3 = int(plate['x3'])
-    y3 = int(plate['y3'])
-    x4 = int(plate['x4'])
-    y4 = int(plate['y4'])
-
-    width = (x2 - x1)
-    height = (y3 - y2)
-    return (width, height)
 
 
-def get_plates_for_group(id):
+# First check if we have already processed this video.  If so, no sense in doing it again:
 
-    colums_i_want = ['id', 'country', 'plate_number', 'confidence', 'frame_num', 'x1', 'x2', 'x3', 'x4',
-                     'y1', 'y2', 'y3', 'y4', 'region']
+with open(options.video, 'rb') as inf:
+    video_md5 = hashlib.md5(inf.read()).hexdigest()
 
-    all_results = []
-    sql_statement = "SELECT " + ','.join(colums_i_want) + " FROM plate WHERE group_id=%d ORDER BY frame_num ASC" % (id)
+cachefile = '/tmp/alprmakevideo_' + options.country + "_" + video_md5
+print("Checking for cached video file for %s %s" % (options.video, cachefile))
+if os.path.isfile(cachefile):
+    # Load the pickle file
+    print("Cache file exists, loading from disk")
+    with open(cachefile, 'r') as inf:
+        results_data = json.load(inf)
+else:
+    # Process the video frame by frame
+    print("Cache file does not exist, processing video")
 
-    for row in c.execute(sql_statement):
-        result_obj = {}
-        index = 0
-        for column in colums_i_want:
-            result_obj[column] = row[index]
-            index += 1
+    alpr = Alpr(options.country, '', '')
+    if not alpr.is_loaded():
+        print('Error loading Alpr')
+        sys.exit(1)
 
-        result_obj['center_x'] = get_center_point(result_obj)[0]
-        result_obj['center_y'] = get_center_point(result_obj)[1]
-        result_obj['width'] = get_width_height(result_obj)[0]
-        result_obj['height'] = get_width_height(result_obj)[1]
+    alpr.set_detect_vehicles(True, True)
 
-        all_results.append(result_obj)
+    alpr_stream = AlprStream(frame_queue_size=10, use_motion_detection=True)
+    if not alpr_stream.is_loaded():
+        print('Error loading AlprStream')
+        sys.exit(1)
 
-    return all_results
+    vehicle = VehicleClassifier('', '')
+    if not vehicle.is_loaded():
+        print('Error loading VehicleClassifier')
+        sys.exit(1)
 
-conn = sqlite3.connect(options.sqlite)
-c = conn.cursor()
+    alpr_stream.connect_video_file(options.video, 0)
+    frame_number = 0
 
-all_groups = []
-where_clause = ""
-if options.must_match_pattern:
-	where_clause = "WHERE matches_pattern=1"
-group_query = "SELECT id, country, plate_number, frame_start, frame_end, confidence, region, region_confidence FROM plate_group %s ORDER BY frame_start ASC" % (where_clause)
+    groups_array = []
 
-for row in c.execute(group_query):
-    group_obj = {
-        'id': int(row[0]),
-        'country': row[1],
-        'plate_number': row[2],
-        'frame_start': int(row[3]),
-        'frame_end': int(row[4]),
-        'confidence': float(row[5]),
-        'region': row[6],
-        'region_confidence': row[7]
-    }
+    def process_group(popped_groups):
+        global groups_array
 
-    all_groups.append(group_obj)
+        for group in popped_groups:
+            unneeded_fields = ['vehicle_crop_jpeg', 'best_plate_jpeg']
+            for field in unneeded_fields:
+                del group[field]
+
+            groups_array.append(group)
+            print('=' * 40)
+            print('Group from frames {}-{}'.format(group['frame_start'], group['frame_end']))
+            if group['data_type'] == 'alpr_group':
+                print('Plate: {} ({:.2f}%)'.format(group['best_plate']['plate'], group['best_plate']['confidence']))
+            elif group['data_type'] == 'vehicle':
+                print('Vehicle')
+
+            print('Vehicle attributes')
+            for attribute, candidates in group['vehicle'].items():
+                print('\t{}: {} ({:.2f}%)'.format(attribute.capitalize(), candidates[0]['name'], candidates[0]['confidence']))
+            print('=' * 40)
+
+    while alpr_stream.video_file_active() or alpr_stream.get_queue_size() > 0 or len(alpr_stream.peek_active_groups()) > 0:
+        frame_results = alpr_stream.process_batch(alpr)
+
+        # Iterate each one so we make sure we print the processing note on every 100th frame
+        for i in range(0, len(frame_results)):
+            frame_number += 1
+            if (frame_number % 100 == 0):
+                active_groups = len(alpr_stream.peek_active_groups())
+                queue_size = alpr_stream.get_queue_size()
+                print("Processing frame {} -- Active groups: {:<3} \tQueue size: {}".format(frame_number, active_groups, queue_size))
+
+        #print('Active groups: {:<3} \tQueue size: {}'.format(active_groups, alpr_stream.get_queue_size()))
+        groups = alpr_stream.pop_completed_groups_and_recognize_vehicle(vehicle, alpr)
+        process_group(groups)
+
+    time.sleep(0.1)
+    groups = alpr_stream.pop_completed_groups_and_recognize_vehicle(vehicle, alpr)
+    process_group(groups)
+
+    # Call when completely done to release memory
+    alpr.unload()
+    vehicle.unload()
+
+    results_data = groups_array
+    with open(cachefile, 'w') as outf:
+        json.dump(results_data, outf)
+
 
 video_clip = VideoFileClip(options.video)
 w,h = moviesize = video_clip.size
@@ -144,10 +155,24 @@ print (TextClip.list('font'))
 
 def get_smoothed_data(group):
 
-    plates_for_group = get_plates_for_group(group['id'])
-    for plate in plates_for_group:
-        print ("%s: frame_num: %d" % (group['plate_number'], plate['frame_num']))
-    smoothed_data = FrameSmoother(group, plates_for_group)
+    plate_frames = []
+    if 'plate_path' in group:
+        path = group['plate_path']
+    else:
+        path = group['vehicle_path']
+
+    for plate_path in path:
+        plate_number = ''
+        if 'best_plate_number' in group:
+            plate_number = group['best_plate_number']
+        print ("%s: frame_num: %d" % (plate_number, plate_path['f']))
+
+        # Convert relative frame to actual
+        plate_path['f'] = plate_path['f'] + group['frame_start']
+        plate_path['center_x'] = int(plate_path['x'] + (plate_path['w'] / 2))
+        plate_path['center_y'] = int(plate_path['y'] + (plate_path['h'] / 2))
+        plate_frames.append(plate_path)
+    smoothed_data = FrameSmoother(group, plate_frames)
 
     return smoothed_data
 
@@ -246,6 +271,8 @@ def get_audio_insert(group_count, time_start):
     afc = afc.set_start(insert_offset + time_start)
     return afc
 
+
+
 composites = []
 
 inserts = []
@@ -253,21 +280,29 @@ audio_track = []
 
 group_count = 0
 
-for group in all_groups:
+for group in results_data:
+
+    object_label = ''
+    if group['data_type'] == 'alpr_group':
+
+        object_label = group['best_plate_number']
+        state = group['best_region']
+        state_conf = group['best_region_confidence']
+        if (state_conf > 80):
+            object_label += " (%s)" % (state)
+
+    elif group['data_type'] == 'vehicle':
+
+        object_label = get_vehicle_label(group)
 
     print (" -- ")
-    print (group['plate_number'])
+    print (object_label)
     print (" --")
 
-    plate_number = group['plate_number']
     # if len(plate_number) == 6:
     #     # Insert a space in the middle
     #     plate_number = plate_number[:3] + " " + plate_number[3:]
 
-    state = group['region']
-    state_conf = group['region_confidence']
-    if (state_conf > 80 and state != 'ir'):
-        plate_number += " (%s)" % (state)
 
     smoothed_data = get_smoothed_data(group)
 
@@ -283,7 +318,7 @@ for group in all_groups:
         continue
 
     # Get the text overlay
-    txt_mov = get_text_clip(group, smoothed_data, plate_number)
+    txt_mov = get_text_clip(group, smoothed_data, object_label)
     composites.append(txt_mov)
 
 

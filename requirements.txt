@@ -1,13 +1,2 @@
-appdirs==1.4.3
-decorator==4.0.11
-imageio==2.1.2
-moviepy==0.2.2.13
-numpy==1.12.1
-olefile==0.44
-opencv-python==3.2.0.6
-packaging==16.8
-Pillow==4.0.0
-pkg-resources==0.0.0
-pyparsing==2.2.0
-six==1.10.0
-tqdm==4.11.2
+moviepy==1.0.3
+opencv-python==4.4.0.46
